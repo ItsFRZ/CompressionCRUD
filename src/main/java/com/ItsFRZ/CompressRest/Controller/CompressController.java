@@ -13,6 +13,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.stereotype.Repository;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,17 +22,23 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.ItsFRZ.CompressRest.Entity.DataModel;
+import com.ItsFRZ.CompressRest.Repository.DataRepository;
 import com.ItsFRZ.CompressRest.Service.DataService;
 
 
 @Controller
 public class CompressController {
 
+	
+
 	DataModel mod;
 	byte[] sdata;
 	
+//	@Autowired
+//	DataService service;
+	
 	@Autowired
-	DataService service;
+	DataRepository repository;
 	
 	@GetMapping("/home")
 	public String viewHomePage() 
@@ -49,7 +56,7 @@ public class CompressController {
 		dataModel.setId(id);
 		dataModel.setName(multipartFile.getOriginalFilename());
 		try {
-			dataModel.setData(multipartFile.getBytes());
+			dataModel.setData(compressBytes(multipartFile.getBytes()));
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -57,14 +64,12 @@ public class CompressController {
 		
 		String filename= multipartFile.getOriginalFilename();
 		System.out.println("Object Name :- "+multipartFile.getOriginalFilename()+" Data Size Before Compression :- "+multipartFile.getSize());
-		try {
-			compressBytes(multipartFile.getBytes(),filename);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		/*
+		 * try { compressBytes(multipartFile.getBytes(),filename); } catch (IOException
+		 * e) { // TODO Auto-generated catch block e.printStackTrace(); }
+		 */
 		
-		service.saveObjects(dataModel);
+		repository.save(dataModel);
 		
 		
 		return "addData";
@@ -73,65 +78,58 @@ public class CompressController {
 	@RequestMapping("download")
 	public String viewData(ModelMap map) 
 	{
-		List<DataModel> dataModels = service.getAllObjects();
+		List<DataModel> dataModels = repository.findAll();
 		map.addAttribute("allData", dataModels);
 		
 		return "downloadData";
 	}
 	
-	@RequestMapping("downloadFile")
-	public StreamingResponseBody downloadData(@RequestParam("id") long id,HttpServletResponse response) 
-	{
-		
-		Optional<DataModel> model = service.getObjectById(id);
-		if(model.isPresent()) {
-			
-			mod = model.get();
-			sdata = mod.getData();
-			DataModel data = new DataModel(decompressBytes(sdata));
-			
-			response.setHeader("Content-Dispositions", "attachment;file=download");
-			
-		}
-		
-		return OutputStream -> {OutputStream.write(sdata);};
-//		return decompressBytes(sdata);
-	}
+
 	
-//	@RequestMapping("downloadFile")
-//	public DataModel downloadData(@RequestParam("id") long id) 
-//	{
-//		final Optional<DataModel> model = service.getObjectById(id);
-//		DataModel data = new DataModel(decompressBytes(model.get().getData()));
-//		
-//		return mod;
-//		
-//	}
-//	
-	
-	
-	// compress the data bytes before storing it in the database
-		public static byte[] compressBytes(byte[] data,String name) {
-	    
-	    	Deflater deflater = new Deflater();
-	        deflater.setInput(data);
-	        deflater.finish();
-	        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(data.length);
-	        byte[] buffer = new byte[1024];
-	        while (!deflater.finished()) {
-	            int count = deflater.deflate(buffer);
-	            outputStream.write(buffer, 0, count);
-	        }
-	        try {
-	            outputStream.close();
-	        } catch (IOException e) {
-	        }
-	        System.out.println("Object Name :- "+name+" Data Size After Compression :- "+outputStream.toByteArray().length);
-	        
-	        return outputStream.toByteArray();
-	    }
 		
-		 // uncompress the image bytes before returning it to the angular application
+		// compress the data bytes before storing it in the database
+			public static byte[] compressBytes(byte[] data) {
+		    
+		    	Deflater deflater = new Deflater();
+		        deflater.setInput(data);
+		        deflater.finish();
+		        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(data.length);
+		        byte[] buffer = new byte[1024];
+		        while (!deflater.finished()) {
+		            int count = deflater.deflate(buffer);
+		            outputStream.write(buffer, 0, count);
+		        }
+		        try {
+		            outputStream.close();
+		        } catch (IOException e) {
+		        }
+//		        System.out.println("Object Name :- "+name+" Data Size After Compression :- "+outputStream.toByteArray().length);
+		        
+		        return outputStream.toByteArray();
+		    }
+			
+			
+			
+			
+			@RequestMapping("/downloadFile")
+			public StreamingResponseBody downloadData(@RequestParam("id") long id,HttpServletResponse response) 
+			{
+				
+				Optional<DataModel> model = repository.findById(id);
+				if(model.isPresent()) {
+					
+					mod = model.get();
+					sdata = decompressBytes(mod.getData());			
+					response.setHeader("Content-Disposition", "");
+					
+				}
+				
+				return OutputStream -> {OutputStream.write(sdata);};
+
+			}
+				
+			
+		 // uncompress the data bytes before returning it to the frontend
 		    public static byte[] decompressBytes(byte[] data) {
 		        Inflater inflater = new Inflater();
 		        inflater.setInput(data);
@@ -148,6 +146,6 @@ public class CompressController {
 		        }
 		       return outputStream.toByteArray();
 		    }
-	    
-
+		    
+	   
 }
